@@ -1,0 +1,213 @@
+---
+title: "Lista V - Arthur"
+format: html
+editor: visual
+---
+
+### Implementação em R
+
+O código final em R com as operações de (-) subtração, (/) divisão e (\^) potenciação é dado a seguir
+
+```{r}
+source("C:\\Users\\Mult-e\\Desktop\\@Doutorado\\PO-249\\Aulas\\plot.R")
+Value <- function(data, children=list(), op = "", name = NULL,
+                  
+                  grad_fn = function(){}) {
+  
+  structure(
+    rlang::env(
+      data = data,
+      children = children,
+      op = op,
+      id = uuid::UUIDgenerate(),
+      name = name,
+      grad = 0, # Por padrão iniciamos como sendo zero
+      grad_fn = grad_fn
+    ),
+    class = "Value"
+  ) }
+print.Value <- function(x) {
+  cat("<Value data=", x$data, ">\n") }
+
+# Adição
+`+.Value` <- function(x, y) {
+  out <- Value(
+    x$data + y$data,
+    children = list(x, y),
+    op = "+",
+    name = paste(x$name, "+", y$name)
+  )
+  out$grad_fn <- function() {
+    x$grad <- x$grad + 1 * out$grad
+    y$grad <- y$grad + 1 * out$grad
+  }
+  out }
+
+# Subtração
+`-.Value` <- function(x,y) {
+  out <- Value(
+    x$data - y$data,
+    children = list(x,y),
+    op = "-",
+    name = paste(x$name, "-", y$name)
+  )
+  out$grad_fn <- function(){
+    x$grad <- x$grad + 1 * out$grad
+    y$grad <- y$grad - 1 * out$grad
+  }
+  out
+}
+
+# Divisão
+`/.Value` <- function(x,y) {
+  out <- Value(
+    x$data / y$data,
+    children = list(x,y),
+    op = "/",
+    name = paste(x$name, "/", y$name)
+  )
+  out$grad_fn <- function(){
+    x$grad <- x$grad + (1 / y$data) * out$grad
+    y$grad <- y$grad + (-x$data / (y$data^2)) * out$grad
+  }
+  out
+}
+
+
+# Multiplicação
+`*.Value` <- function(x, y) {
+  out <- Value(
+    x$data * y$data,
+    children = list(x, y),
+    op = "*",
+    name = paste(x$name, "*", y$name) )
+  out$grad_fn <- function() {
+    x$grad <- x$grad + y$data * out$grad
+    y$grad <- y$grad + x$data * out$grad }
+  out
+}
+
+# Potenciação
+`^.Value` <- function(x, y) {
+  out <- Value(
+    x$data ^ y$data,
+    children = list(x, y),
+    op = "^",
+    name = paste(x$name, "^", y$name) )
+  out$grad_fn <- function() {
+    # f(x,y) = x^y
+    # df/dx = y * x exp (y-1)
+    # df/dy = x^y * ln(x)
+    x$grad <- x$grad + (y$data * x$data^(y$data - 1)) * out$grad
+    y$grad <- y$grad + (x$data^y$data * log(x$data)) * out$grad }
+  out
+}
+
+
+# Estabelece a ordem dos nós, na ordem topológica, para mostrar
+# os gradientes.
+topo_sort <- function(node, topo = list(), visited = c()) {
+  # 1. Verifica se o nó já foi visitado
+  if (node$id %in% visited) return(list(topo = topo, visited = visited))
+  
+  # 2. Marca o nó como visitado
+  visited <- c(visited, node$id)
+  
+  # 3. Visita recursivamente os filhos
+  for (child in node$children) {
+    
+    result <- topo_sort(child, topo, visited)
+    topo <- result$topo
+    visited <- result$visited
+  }
+  
+  # 4. Adiciona o nó à lista topológica (após seus filhos)
+  topo <- c(topo, list(node))
+  
+  # Retorna uma lista nomeada para fácil desempacotamento
+  return(list(topo = topo, visited = visited))
+}
+
+
+# Calcula todos os gradientes usando a ordem topológica reversa.
+backprop <- function(value) {
+  # 1. Inicializa o gradiente da raiz
+  value$grad <- 1
+  
+  # 2. Obtém a ordem topológica
+  result <- topo_sort(value)
+  topo <- result$topo
+  
+  # 3. Percorre o grafo na ordem topológica reversa e calcula os gradientes
+  for (node in rev(topo)) {
+    node$grad_fn() 
+  }
+  
+}
+```
+
+Uma vez que o código está implementado, a seguir será apresentado alguns exemplos, visando validar a implementação
+
+### Exemplo 01
+
+```{r}
+a <- Value(2, name = "a")
+b <- a + a
+b$name <- "b"
+
+backprop(b)
+plot_graph(b)
+```
+
+### Exemplo 02
+
+```{r}
+x <- Value(2, name="x")
+y <- Value(3, name="y")
+c <- x - y
+d <- c - y
+
+z <- c * d
+
+backprop(z)
+plot_graph(z)
+```
+
+### Exemplo 03
+
+```{r}
+a <- Value(1, name = "a")
+b <- Value(1, name = "b")
+c <- Value(1, name = "c")
+
+d <- a * b
+
+e <- d * c
+
+f <- Value(-4, name = "f")
+L <- e+f
+
+backprop(L)
+plot_graph(L)
+```
+
+### Exemplo 04
+
+```{r}
+a <- Value(1, name = "a")
+b <- Value(2, name = "b")
+c <- Value(3, name = "c")
+d <- Value(4, name = "d")
+
+e <- a + b
+f <- c - d
+
+h <- e ^ f
+
+backprop(h)
+plot_graph(h)
+```
+
+### Conclusão
+
+Dessa maneira, a implementação apresenta-se correta para todas as operações que estão implementadas em Value.
